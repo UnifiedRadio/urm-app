@@ -1,0 +1,30 @@
+[package]
+name = "openradio-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "openradio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+urm-core = { workspace = true }
+urm-adapter-chirp = { path = "../crates/urm-adapter-chirp" }
+urm-adapter-xiaomi = { path = "../crates/urm-adapter-xiaomi" }
+urm-adapter-serial = { path = "../crates/urm-adapter-serial" }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dirs-next = "2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

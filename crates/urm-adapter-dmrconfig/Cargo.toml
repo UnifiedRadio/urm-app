@@ -1,0 +1,18 @@
+[package]
+name = "urm-adapter-dmrconfig"
+description = "dmrconfig bridge adapter — DMR CLI automation for headless/batch workflows (Phase 6)"
+version.workspace = true
+edition.workspace = true
+license = "BSD-3-Clause"
+
+# Phase 6 placeholder — not active in MVP
+# dmrconfig is BSD-3-Clause, most permissive of the bridge set
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"

@@ -1,0 +1,16 @@
+[package]
+name = "urm-adapter-serial"
+description = "Generic serial port layer — enumeration, probing, driver fingerprinting, permission checks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serialport = { workspace = true }
+async-trait = "0.1"

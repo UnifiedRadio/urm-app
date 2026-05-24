@@ -1,0 +1,18 @@
+[package]
+name = "urm-adapter-editcp"
+description = "editcp bridge adapter — MD-380/MD-390/Alinco DJ-MD40 codeplug editing (Phase 6)"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-or-later"
+
+# Phase 6 placeholder — not active in MVP
+# editcp is GPL-3.0; called via CLI subprocess
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"

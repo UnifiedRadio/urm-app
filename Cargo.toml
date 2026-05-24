@@ -1,0 +1,43 @@
+[workspace]
+members = [
+    "src-tauri",
+    "crates/urm-core",
+    "crates/urm-adapter-chirp",
+    "crates/urm-adapter-xiaomi",
+    "crates/urm-adapter-serial",
+    "crates/urm-adapter-qdmr",
+    "crates/urm-adapter-editcp",
+    "crates/urm-adapter-dmrconfig",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["OpenRadio Contributors"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/openradio/openradio"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+# Error handling
+thiserror = "1"
+anyhow = "1"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Serial port
+serialport = "4"
+# BLE
+btleplug = "0.11"
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+# UUID
+uuid = { version = "1", features = ["v4"] }
+# Internal crates
+urm-core = { path = "crates/urm-core" }

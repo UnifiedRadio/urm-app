@@ -1,0 +1,21 @@
+[package]
+name = "urm-adapter-chirp"
+description = "CHIRP bridge adapter — calls CHIRP-next via Python subprocess for analog radio programming"
+version.workspace = true
+edition.workspace = true
+# GPL-3.0 boundary: this crate wraps CHIRP (GPL-3.0) via subprocess IPC, no FFI linking
+license = "GPL-3.0-or-later"
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"
+tempfile = "3"
+which = "6"
+semver = "1"
+uuid = { workspace = true }

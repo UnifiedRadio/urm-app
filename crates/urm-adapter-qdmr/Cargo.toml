@@ -1,0 +1,18 @@
+[package]
+name = "urm-adapter-qdmr"
+description = "qDMR bridge adapter — DMR codeplug read/write for TYT, Radioddity, AnyTone (Phase 6)"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-or-later"
+
+# Phase 6 placeholder — not active in MVP
+# qDMR is GPL-3.0-or-later; called via CLI subprocess, same pattern as urm-adapter-chirp
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"

@@ -1,0 +1,20 @@
+[package]
+name = "urm-adapter-xiaomi"
+description = "Xiaomi Walkie Talkie 2 BLE adapter — GATT-based channel read/write"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Phase 3: BLE protocol reverse engineering in progress
+# See docs/design.md Q1 — GATT feasibility must be confirmed before committing timeline
+
+[dependencies]
+urm-core = { workspace = true, features = ["adapter-api"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+btleplug = { workspace = true }
+async-trait = "0.1"
+uuid = { workspace = true }
