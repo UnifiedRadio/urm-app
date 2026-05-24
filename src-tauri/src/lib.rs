@@ -2,7 +2,6 @@ mod commands;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use urm_adapter_chirp::ChirpAdapter;
 use urm_core::backup::BackupManager;
 use urm_core::catalog::device_catalog;
@@ -10,13 +9,12 @@ use urm_core::router::AdapterRouter;
 use urm_core::task_queue::TaskQueue;
 
 pub struct AppState {
-    pub router: Arc<Mutex<AdapterRouter>>,
+    pub router: Arc<AdapterRouter>,
     pub task_queue: Arc<TaskQueue>,
 }
 
 impl AppState {
     fn init() -> Self {
-        // Backup directory: platform data dir / openradio / backups
         let backup_dir = dirs_next::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("openradio")
@@ -29,7 +27,7 @@ impl AppState {
         register_catalog_chirp_adapters(&mut router);
 
         AppState {
-            router: Arc::new(Mutex::new(router)),
+            router: Arc::new(router),
             task_queue,
         }
     }

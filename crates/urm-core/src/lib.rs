@@ -7,7 +7,7 @@ pub mod router;
 pub mod schema;
 pub mod task_queue;
 
-pub use adapter::{RadioAdapter, Transport, AdapterError, WriteReport, BackupImage};
+pub use adapter::{RadioAdapter, Transport, AdapterError, WriteReport, BackupImage, dry_run_from_core_validation};
 pub use backup::BackupMeta;
 pub use catalog::{canonical_model_id, device_catalog, DeviceCatalog, DeviceCatalogEntry};
 pub use schema::{UrcProfile, Channel, ChannelMode};

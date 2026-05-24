@@ -45,12 +45,7 @@ impl RadioAdapter for XiaomiAdapter {
         _transport: &Transport,
         profile: &UrcProfile,
     ) -> Result<DryRunReport, AdapterError> {
-        let result = urm_core::schema::validation::validate_profile(profile);
-        Ok(DryRunReport {
-            valid: result.is_valid(),
-            errors: vec![],
-            warnings: vec![],
-        })
+        Ok(urm_core::dry_run_from_core_validation(profile))
     }
 }
 

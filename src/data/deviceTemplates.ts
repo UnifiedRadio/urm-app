@@ -119,6 +119,7 @@ function bandLabel(min: number, max: number, index: number): string {
 }
 
 function adapterFor(entry: DeviceCatalogEntry): DeviceBinding['adapter'] {
+  if (entry.adapter) return entry.adapter
   if (entry.transport === 'ble') return 'xiaomi_ble'
   if (entry.chirp_driver) return 'chirp'
   return 'chirp'

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use crate::schema::{UrcProfile, DeviceModel};
+use crate::schema::validation::validate_profile;
 
 /// The single extension point for all hardware backends.
 /// External crates implement this trait against urm-core = { features = ["adapter-api"] }.
@@ -27,6 +28,25 @@ pub trait RadioAdapter: Send + Sync {
         transport: &Transport,
         profile: &UrcProfile,
     ) -> Result<DryRunReport, AdapterError>;
+}
+
+/// Shared dry-run implementation: runs core validation and maps results into DryRunReport.
+/// Adapters that don't need hardware-specific validation can delegate to this.
+pub fn dry_run_from_core_validation(profile: &UrcProfile) -> DryRunReport {
+    let result = validate_profile(profile);
+    DryRunReport {
+        valid: result.is_valid(),
+        errors: result.errors.iter().map(|e| ValidationIssue {
+            channel_id: e.channel_id.clone(),
+            field: Some(e.field.clone()),
+            message: e.message.clone(),
+        }).collect(),
+        warnings: result.warnings.iter().map(|w| ValidationIssue {
+            channel_id: w.channel_id.clone(),
+            field: Some(w.field.clone()),
+            message: w.message.clone(),
+        }).collect(),
+    }
 }
 
 #[derive(Debug, Clone)]

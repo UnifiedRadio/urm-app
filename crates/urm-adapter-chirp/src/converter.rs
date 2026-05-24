@@ -83,7 +83,10 @@ pub fn chirp_csv_to_urc(text: &str) -> anyhow::Result<UrcProfile> {
         let tx_freq = match get(idx_duplex) {
             "+" => rx_freq + offset,
             "-" => rx_freq - offset,
-            _ => rx_freq, // simplex or split — treat as simplex for now
+            "split" | "Split" => {
+                if offset > 0.0 { offset } else { rx_freq }
+            }
+            _ => rx_freq,
         };
 
         // Tone / squelch

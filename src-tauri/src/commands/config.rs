@@ -6,10 +6,33 @@ use serde::Serialize;
 use crate::AppState;
 
 #[derive(Serialize)]
+pub struct ValidationItem {
+    pub channel_id: Option<String>,
+    pub field: String,
+    pub message: String,
+}
+
+#[derive(Serialize)]
 pub struct ValidationResult {
     pub valid: bool,
-    pub errors: Vec<String>,
-    pub warnings: Vec<String>,
+    pub errors: Vec<ValidationItem>,
+    pub warnings: Vec<ValidationItem>,
+}
+
+fn map_core_result(result: urm_core::schema::ValidationResult) -> ValidationResult {
+    ValidationResult {
+        valid: result.is_valid(),
+        errors: result.errors.iter().map(|e| ValidationItem {
+            channel_id: e.channel_id.clone(),
+            field: e.field.clone(),
+            message: e.message.clone(),
+        }).collect(),
+        warnings: result.warnings.iter().map(|w| ValidationItem {
+            channel_id: w.channel_id.clone(),
+            field: w.field.clone(),
+            message: w.message.clone(),
+        }).collect(),
+    }
 }
 
 // ── Import / Export ──────────────────────────────────────────────────────────
@@ -61,22 +84,12 @@ pub async fn export_urc_yaml(profile: UrcProfile, path: String) -> Result<(), St
 
 #[tauri::command]
 pub async fn validate_profile(profile: UrcProfile) -> Result<ValidationResult, String> {
-    let result = core_validate(&profile);
-    Ok(ValidationResult {
-        valid: result.is_valid(),
-        errors: result.errors.iter().map(|e| e.message.clone()).collect(),
-        warnings: result.warnings.iter().map(|w| w.message.clone()).collect(),
-    })
+    Ok(map_core_result(core_validate(&profile)))
 }
 
 #[tauri::command]
 pub async fn validate_for_device(profile: UrcProfile, model: String) -> Result<ValidationResult, String> {
-    let result = core_validate_for_device(&profile, &model);
-    Ok(ValidationResult {
-        valid: result.is_valid(),
-        errors: result.errors.iter().map(|e| e.message.clone()).collect(),
-        warnings: result.warnings.iter().map(|w| w.message.clone()).collect(),
-    })
+    Ok(map_core_result(core_validate_for_device(&profile, &model)))
 }
 
 // ── Backup / Version history (FR-04) ─────────────────────────────────────────

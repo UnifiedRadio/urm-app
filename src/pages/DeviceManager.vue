@@ -86,7 +86,7 @@ async function runMockWrite() {
     const validation = await validateForDevice(channelStore.profile, model.value)
     if (!validation.valid) {
       mark('Dry-run 校验', 'error')
-      throw new Error(validation.errors.join('; '))
+      throw new Error(validation.errors.map(e => e.message).join('; '))
     }
     mark('Dry-run 校验', 'ok')
     mark('备份', 'ok')
@@ -119,7 +119,7 @@ async function runSafeWrite() {
     mark('驱动识别', 'ok')
     mark('Dry-run 校验', 'running')
     const validation = await validateForDevice(channelStore.profile, model.value)
-    if (!validation.valid) throw new Error(validation.errors.join('; '))
+    if (!validation.valid) throw new Error(validation.errors.map(e => e.message).join('; '))
     mark('Dry-run 校验', 'ok')
     mark('备份', 'running')
     await backupDevice(selectedPort.value, model.value)

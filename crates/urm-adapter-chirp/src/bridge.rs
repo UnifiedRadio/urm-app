@@ -130,16 +130,7 @@ impl RadioAdapter for ChirpAdapter {
         _transport: &Transport,
         profile: &UrcProfile,
     ) -> Result<DryRunReport, AdapterError> {
-        let result = urm_core::schema::validation::validate_profile(profile);
-        Ok(DryRunReport {
-            valid: result.is_valid(),
-            errors: result.errors.iter().map(|e| urm_core::adapter::ValidationIssue {
-                channel_id: e.channel_id.clone(),
-                field: Some(e.field.clone()),
-                message: e.message.clone(),
-            }).collect(),
-            warnings: vec![],
-        })
+        Ok(urm_core::dry_run_from_core_validation(profile))
     }
 }
 

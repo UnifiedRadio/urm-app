@@ -31,6 +31,7 @@ pub struct DeviceCatalogEntry {
     pub valid_modes: Vec<String>,
     pub transport: String,
     pub baud_rate: Option<u32>,
+    pub adapter: Option<String>,
 }
 
 impl DeviceCatalog {

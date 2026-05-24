@@ -80,10 +80,16 @@ export interface WriteResult {
   warnings: string[]
 }
 
+export interface ValidationItem {
+  channel_id: string | null
+  field: string
+  message: string
+}
+
 export interface ValidationResult {
   valid: boolean
-  errors: string[]
-  warnings: string[]
+  errors: ValidationItem[]
+  warnings: ValidationItem[]
 }
 
 export type BackupKind = 'device_image' | 'profile_snapshot'
@@ -110,6 +116,7 @@ export interface DeviceCatalogEntry {
   valid_modes: string[]
   transport: 'serial' | 'ble' | 'otg'
   baud_rate: number | null
+  adapter: DeviceBinding['adapter'] | null
 }
 
 export interface DeviceCatalog {

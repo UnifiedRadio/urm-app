@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { UrcProfile, Channel } from '../types/urc'
+import type { UrcProfile, Channel, ValidationItem } from '../types/urc'
 import { validateProfile } from '../api/config'
 
 export const useChannelStore = defineStore('channels', () => {
   const profile = ref<UrcProfile | null>(null)
   const isDirty = ref(false)
-  const validationErrors = ref<string[]>([])
+  const validationErrors = ref<ValidationItem[]>([])
 
   const channelCount = computed(() => profile.value?.channels.length ?? 0)
 

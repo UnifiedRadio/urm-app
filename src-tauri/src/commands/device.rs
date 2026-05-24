@@ -26,10 +26,8 @@ pub async fn read_device(
 ) -> Result<UrcProfile, String> {
     let (resolved_model, baud_rate) = resolve_model_and_baud(&model);
     let transport = urm_core::Transport::Serial { port, baud_rate };
-    let router = state.router.lock().await;
-    let adapter = router.resolve(&resolved_model)
+    let adapter = state.router.resolve(&resolved_model)
         .ok_or_else(|| format!("no adapter registered for model '{resolved_model}'"))?;
-    drop(router);
     state.task_queue
         .read(adapter.as_ref(), &transport)
         .await
@@ -45,10 +43,8 @@ pub async fn write_device(
 ) -> Result<WriteReport, String> {
     let (resolved_model, baud_rate) = resolve_model_and_baud(&model);
     let transport = urm_core::Transport::Serial { port, baud_rate };
-    let router = state.router.lock().await;
-    let adapter = router.resolve(&resolved_model)
+    let adapter = state.router.resolve(&resolved_model)
         .ok_or_else(|| format!("no adapter registered for model '{resolved_model}'"))?;
-    drop(router);
     state.task_queue
         .write(adapter.as_ref(), &transport, &profile, false)
         .await
@@ -63,10 +59,8 @@ pub async fn backup_device(
 ) -> Result<BackupMeta, String> {
     let (resolved_model, baud_rate) = resolve_model_and_baud(&model);
     let transport = urm_core::Transport::Serial { port, baud_rate };
-    let router = state.router.lock().await;
-    let adapter = router.resolve(&resolved_model)
+    let adapter = state.router.resolve(&resolved_model)
         .ok_or_else(|| format!("no adapter registered for model '{resolved_model}'"))?;
-    drop(router);
     state.task_queue
         .backup(adapter.as_ref(), &transport, "manual")
         .await

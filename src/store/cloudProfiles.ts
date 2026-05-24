@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { functionUrl, requireSupabase } from '../api/supabase'
 import { useAuthStore } from './auth'
+import { useAsync } from '../composables/useAsync'
 import type { UrcProfile } from '../types/urc'
 import type { CloudProfileRow, SharePackResponse, SharePreview } from '../types/cloud'
 
@@ -9,43 +10,33 @@ export const useCloudProfileStore = defineStore('cloudProfiles', () => {
   const profiles = ref<CloudProfileRow[]>([])
   const currentCloudId = ref<string | null>(null)
   const currentLocalProfileId = ref<string | null>(null)
-  const loading = ref(false)
-  const error = ref('')
   const lastSavedAt = ref<string | null>(null)
+  const { loading, error, run } = useAsync()
 
   async function loadProfiles() {
-    const client = requireSupabase()
-    loading.value = true
-    error.value = ''
-    try {
+    await run(async () => {
+      const client = requireSupabase()
       const { data, error: queryError } = await client
         .from('profiles')
         .select('*')
         .order('updated_at', { ascending: false })
       if (queryError) throw queryError
       profiles.value = (data ?? []) as CloudProfileRow[]
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function saveProfile(profile: UrcProfile, orgId: string | null = null) {
     const auth = useAuthStore()
     if (!auth.user) throw new Error('Sign in before saving cloud profiles.')
-    const client = requireSupabase()
-    loading.value = true
-    error.value = ''
-    try {
+    return await run(async () => {
+      const client = requireSupabase()
       const payload = {
-          owner_id: auth.user.id,
-          org_id: orgId,
-          name: profile.name,
-          urc_data: profile,
-          updated_at: new Date().toISOString(),
-        }
+        owner_id: auth.user!.id,
+        org_id: orgId,
+        name: profile.name,
+        urc_data: profile,
+        updated_at: new Date().toISOString(),
+      }
       const shouldUpdate = currentCloudId.value !== null && currentLocalProfileId.value === profile.id
       const query = shouldUpdate
         ? client.from('profiles').update(payload).eq('id', currentCloudId.value)
@@ -59,12 +50,7 @@ export const useCloudProfileStore = defineStore('cloudProfiles', () => {
       lastSavedAt.value = data.updated_at
       await loadProfiles()
       return data as CloudProfileRow
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   function toProfile(row: CloudProfileRow): UrcProfile {
@@ -77,24 +63,28 @@ export const useCloudProfileStore = defineStore('cloudProfiles', () => {
   async function createShareLink(profileId: string, expiresInDays = 30) {
     const auth = useAuthStore()
     if (!auth.session) throw new Error('Sign in before creating share links.')
-    const res = await fetch(functionUrl('share-pack'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${auth.session.access_token}`,
-      },
-      body: JSON.stringify({ profile_id: profileId, expires_in_days: expiresInDays }),
+    return await run(async () => {
+      const res = await fetch(functionUrl('share-pack'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.session!.access_token}`,
+        },
+        body: JSON.stringify({ profile_id: profileId, expires_in_days: expiresInDays }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'Failed to create share link.')
+      return body as SharePackResponse
     })
-    const body = await res.json()
-    if (!res.ok) throw new Error(body.error ?? 'Failed to create share link.')
-    return body as SharePackResponse
   }
 
   async function fetchSharePreview(shortCode: string) {
-    const res = await fetch(`${functionUrl('share-pack')}?code=${encodeURIComponent(shortCode)}`)
-    const body = await res.json()
-    if (!res.ok) throw new Error(body.error ?? 'Failed to load shared profile.')
-    return body as SharePreview
+    return await run(async () => {
+      const res = await fetch(`${functionUrl('share-pack')}?code=${encodeURIComponent(shortCode)}`)
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'Failed to load shared profile.')
+      return body as SharePreview
+    })
   }
 
   async function importSharedProfile(preview: SharePreview) {

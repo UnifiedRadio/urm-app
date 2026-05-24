@@ -24,7 +24,7 @@ impl BackupManager {
     ) -> anyhow::Result<BackupMeta> {
         self.ensure_dir().await?;
         let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-        let stem = format!("img_{}_{}_{}", profile_id, image.device_model, timestamp);
+        let stem = format!("img--{}--{}--{}", profile_id, image.device_model, timestamp);
         let filename = format!("{}.{}", stem, image.format);
         let path = self.storage_dir.join(&filename);
         tokio::fs::write(&path, &image.data).await?;
@@ -43,7 +43,7 @@ impl BackupManager {
     pub async fn save_snapshot(&self, profile: &UrcProfile) -> anyhow::Result<BackupMeta> {
         self.ensure_dir().await?;
         let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-        let stem = format!("snap_{}_{}", profile.id, timestamp);
+        let stem = format!("snap--{}--{}", profile.id, timestamp);
         let path = self.storage_dir.join(format!("{}.json", stem));
         let json = serde_json::to_string_pretty(profile)?;
         let size = json.len();
@@ -77,35 +77,21 @@ impl BackupManager {
                 None => continue,
             };
 
-            let (kind, profile_id, device_model) = if let Some(rest) = stem.strip_prefix("snap_") {
-                // snap_{profile_id}_{timestamp}  — profile_id is UUID (no underscores)
-                let (pid, _ts) = rest.split_once('_').unwrap_or((rest, ""));
-                (BackupKind::ProfileSnapshot, pid.to_string(), String::new())
+            let meta = if let Some(rest) = stem.strip_prefix("snap--") {
+                parse_snap_stem(rest, &stem, &path, &file_meta)
+            } else if let Some(rest) = stem.strip_prefix("img--") {
+                parse_img_stem(rest, &stem, &path, &file_meta)
+            } else if let Some(rest) = stem.strip_prefix("snap_") {
+                parse_legacy_snap_stem(rest, &stem, &path, &file_meta)
             } else if let Some(rest) = stem.strip_prefix("img_") {
-                // img_{profile_id}_{device_model}_{timestamp}
-                // profile_id is UUID (hyphens only), device_model may contain underscores
-                let (pid, rest2) = rest.split_once('_').unwrap_or((rest, ""));
-                // rest2 = "{device_model}_{timestamp}" — strip timestamp from right
-                let model = rest2.rsplitn(2, '_').last().unwrap_or("").to_string();
-                (BackupKind::DeviceImage, pid.to_string(), model)
+                parse_legacy_img_stem(rest, &stem, &path, &file_meta)
             } else {
-                continue;
+                None
             };
 
-            let created_at = file_meta
-                .modified()
-                .map(|t| chrono::DateTime::<chrono::Utc>::from(t))
-                .unwrap_or_else(|_| chrono::Utc::now());
-
-            metas.push(BackupMeta {
-                id: stem,
-                profile_id,
-                path,
-                device_model,
-                kind,
-                created_at,
-                size_bytes: file_meta.len() as usize,
-            });
+            if let Some(m) = meta {
+                metas.push(m);
+            }
         }
 
         metas.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -118,6 +104,55 @@ impl BackupManager {
         let text = tokio::fs::read_to_string(&path).await?;
         let profile: UrcProfile = serde_json::from_str(&text)?;
         Ok(profile)
+    }
+}
+
+// New format: snap--{profile_id}--{timestamp}
+fn parse_snap_stem(rest: &str, stem: &str, path: &std::path::Path, file_meta: &std::fs::Metadata) -> Option<BackupMeta> {
+    let (pid, _ts) = rest.split_once("--")?;
+    Some(build_meta(stem, pid, "", BackupKind::ProfileSnapshot, path, file_meta))
+}
+
+// New format: img--{profile_id}--{device_model}--{timestamp}
+fn parse_img_stem(rest: &str, stem: &str, path: &std::path::Path, file_meta: &std::fs::Metadata) -> Option<BackupMeta> {
+    let (pid, remainder) = rest.split_once("--")?;
+    let model = remainder.split_once("--").map(|(m, _)| m).unwrap_or(remainder);
+    Some(build_meta(stem, pid, model, BackupKind::DeviceImage, path, file_meta))
+}
+
+// Legacy format: snap_{profile_id}_{timestamp}
+fn parse_legacy_snap_stem(rest: &str, stem: &str, path: &std::path::Path, file_meta: &std::fs::Metadata) -> Option<BackupMeta> {
+    let (pid, _ts) = rest.split_once('_').unwrap_or((rest, ""));
+    Some(build_meta(stem, pid, "", BackupKind::ProfileSnapshot, path, file_meta))
+}
+
+// Legacy format: img_{profile_id}_{device_model}_{timestamp}
+fn parse_legacy_img_stem(rest: &str, stem: &str, path: &std::path::Path, file_meta: &std::fs::Metadata) -> Option<BackupMeta> {
+    let (pid, rest2) = rest.split_once('_').unwrap_or((rest, ""));
+    let model = rest2.rsplitn(2, '_').last().unwrap_or("").to_string();
+    Some(build_meta(stem, pid, &model, BackupKind::DeviceImage, path, file_meta))
+}
+
+fn build_meta(
+    stem: &str,
+    profile_id: &str,
+    device_model: &str,
+    kind: BackupKind,
+    path: &std::path::Path,
+    file_meta: &std::fs::Metadata,
+) -> BackupMeta {
+    let created_at = file_meta
+        .modified()
+        .map(chrono::DateTime::<chrono::Utc>::from)
+        .unwrap_or_else(|_| chrono::Utc::now());
+    BackupMeta {
+        id: stem.to_string(),
+        profile_id: profile_id.to_string(),
+        path: path.to_path_buf(),
+        device_model: device_model.to_string(),
+        kind,
+        created_at,
+        size_bytes: file_meta.len() as usize,
     }
 }
 

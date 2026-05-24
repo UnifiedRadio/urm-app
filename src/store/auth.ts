@@ -2,13 +2,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Session, User } from '@supabase/supabase-js'
 import { isCloudConfigured, requireSupabase, supabase } from '../api/supabase'
+import { useAsync } from '../composables/useAsync'
 
 export const useAuthStore = defineStore('auth', () => {
   const session = ref<Session | null>(null)
   const user = computed<User | null>(() => session.value?.user ?? null)
-  const loading = ref(false)
-  const error = ref('')
   const initialized = ref(false)
+  const { loading, error, run } = useAsync()
 
   async function init() {
     if (initialized.value) return
@@ -33,37 +33,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signIn(email: string, password: string) {
-    loading.value = true
-    error.value = ''
-    try {
+    await run(async () => {
       const client = requireSupabase()
       const { data, error: signInError } = await client.auth.signInWithPassword({ email, password })
       if (signInError) throw signInError
       session.value = data.session
       await ensureUserRecord(data.user)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function signUp(email: string, password: string) {
-    loading.value = true
-    error.value = ''
-    try {
+    await run(async () => {
       const client = requireSupabase()
       const { data, error: signUpError } = await client.auth.signUp({ email, password })
       if (signUpError) throw signUpError
       session.value = data.session
       if (data.user) await ensureUserRecord(data.user)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function signOut() {

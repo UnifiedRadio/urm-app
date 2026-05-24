@@ -77,13 +77,13 @@
       <div v-if="store.validationErrors.length" class="banner banner-error">
         <strong>校验错误：</strong>
         <ul>
-          <li v-for="e in store.validationErrors" :key="e">{{ e }}</li>
+          <li v-for="e in store.validationErrors" :key="e.message">{{ e.message }}</li>
         </ul>
       </div>
       <div v-if="validationWarnings.length" class="banner banner-warn">
         <strong>警告：</strong>
         <ul>
-          <li v-for="w in validationWarnings" :key="w">{{ w }}</li>
+          <li v-for="w in validationWarnings" :key="w.message">{{ w.message }}</li>
         </ul>
       </div>
 
@@ -258,7 +258,7 @@ const freqRangeHint = computed(() => {
 const importMenuOpen = ref(false)
 const exportMenuOpen = ref(false)
 const validating = ref(false)
-const validationWarnings = ref<string[]>([])
+const validationWarnings = ref<import('../types/urc').ValidationItem[]>([])
 
 // ── History panel ────────────────────────────────────────────────────────────
 const historyOpen = ref(false)
