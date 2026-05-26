@@ -12,9 +12,16 @@ license.workspace = true
 urm-core = { workspace = true, features = ["adapter-api"] }
 tokio = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 btleplug = { workspace = true }
 async-trait = "0.1"
 uuid = { workspace = true }
+futures = "0.3"
+p256 = { version = "0.13", features = ["ecdh"] }
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+cipher = { version = "0.4", features = ["block-padding"] }
+rand_core = { version = "0.6", features = ["getrandom"] }

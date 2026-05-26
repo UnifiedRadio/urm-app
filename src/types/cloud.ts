@@ -32,6 +32,46 @@ export interface OrganizationRow {
   created_at: string
 }
 
+export interface RiskPackWeatherHour {
+  time: string
+  temperature_2m: number
+  precipitation_probability: number
+  windspeed_10m: number
+}
+
+export interface RiskPackWeather {
+  fetched_at: string
+  source: 'open_meteo'
+  forecast: RiskPackWeatherHour[]
+}
+
+export interface RiskPackSource {
+  id: string
+  label: string
+  url: string
+  category: 'weather' | 'disaster' | 'traffic' | 'local' | 'other'
+  region?: string
+}
+
+export interface RiskPackChecklistItem {
+  id: string
+  text: string
+  checked: boolean
+}
+
+export interface RiskPack {
+  location_name: string
+  latitude: number | null
+  longitude: number | null
+  activity_start: string | null
+  activity_end: string | null
+  weather_cache: RiskPackWeather | null
+  official_links: RiskPackSource[]
+  checklist: RiskPackChecklistItem[]
+  captain_notes: string
+  ai_summary: { text: string; generated_at: string } | null
+}
+
 export interface ActivityRow {
   id: string
   org_id: string | null
@@ -39,8 +79,10 @@ export interface ActivityRow {
   name: string
   description: string | null
   status: 'planning' | 'active' | 'archived'
+  location: { name?: string; lat?: number; lng?: number } | null
   device_model: string | null
   start_date: string | null
   end_date: string | null
+  risk_pack: RiskPack | null
   created_at: string
 }

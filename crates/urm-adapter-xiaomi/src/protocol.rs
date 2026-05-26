@@ -310,6 +310,177 @@ pub fn decode_css(css: u16) -> (u8, u8) {
     (tone_type, tone_code)
 }
 
+// ── Protobuf response reader ──────────────────────────────────────────────────
+
+#[derive(Debug)]
+pub enum PbValue {
+    Varint(u64),
+    Bytes(Vec<u8>),
+}
+
+/// Read a single protobuf (field_number, wire_type, value) at `pos`.
+/// Returns `(field_number, value, next_pos)`.
+pub fn pb_read_field(data: &[u8], pos: usize) -> Result<(u32, PbValue, usize)> {
+    let (tag, pos) = read_varint(data, pos)?;
+    let field = (tag >> 3) as u32;
+    let wire = (tag & 0x07) as u8;
+    match wire {
+        0 => {
+            let (v, next) = read_varint(data, pos)?;
+            Ok((field, PbValue::Varint(v), next))
+        }
+        1 => {
+            // 64-bit fixed — skip
+            if pos + 8 > data.len() {
+                bail!("fixed64 field overruns buffer");
+            }
+            Ok((field, PbValue::Bytes(data[pos..pos + 8].to_vec()), pos + 8))
+        }
+        2 => {
+            let (len, pos) = read_varint(data, pos)?;
+            let end = pos + len as usize;
+            if end > data.len() {
+                bail!("length-delimited field overruns buffer");
+            }
+            Ok((field, PbValue::Bytes(data[pos..end].to_vec()), end))
+        }
+        5 => {
+            // 32-bit fixed — skip
+            if pos + 4 > data.len() {
+                bail!("fixed32 field overruns buffer");
+            }
+            Ok((field, PbValue::Bytes(data[pos..pos + 4].to_vec()), pos + 4))
+        }
+        wt => bail!("unsupported wire type {wt} at field {field}"),
+    }
+}
+
+fn read_varint(data: &[u8], mut pos: usize) -> Result<(u64, usize)> {
+    let mut result: u64 = 0;
+    let mut shift = 0u32;
+    loop {
+        if pos >= data.len() {
+            bail!("truncated varint");
+        }
+        let b = data[pos];
+        pos += 1;
+        result |= ((b & 0x7F) as u64) << shift;
+        if b & 0x80 == 0 {
+            return Ok((result, pos));
+        }
+        shift += 7;
+        if shift >= 64 {
+            bail!("varint overflow");
+        }
+    }
+}
+
+// ── ConnectResponse / LoginResponse ──────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConnectResult {
+    Allow,
+    Wait,
+    Refuse,
+    LowPower,
+    Unknown(u64),
+}
+
+impl From<u64> for ConnectResult {
+    fn from(v: u64) -> Self {
+        match v {
+            1 => Self::Allow,
+            2 => Self::Wait,
+            3 => Self::Refuse,
+            4 => Self::LowPower,
+            n => Self::Unknown(n),
+        }
+    }
+}
+
+pub struct ConnectResponse {
+    pub result: ConnectResult,
+    /// Device ECDH public key (field 2 in LoginResponse, SEC1 uncompressed bytes).
+    pub device_public_key: Option<Vec<u8>>,
+    /// AES-encrypted session data (field 3): aes_key(16) || aes_iv(16) || token.
+    pub encrypted_session_data: Option<Vec<u8>>,
+}
+
+/// Parse a ConnectResponse (cmdId 20002) or LoginResponse (cmdId 20024) payload.
+pub fn parse_connect_response(payload: &[u8]) -> Result<ConnectResponse> {
+    let mut result = ConnectResult::Unknown(0);
+    let mut device_public_key = None;
+    let mut encrypted_session_data = None;
+    let mut pos = 0;
+    while pos < payload.len() {
+        let (field, value, next) = pb_read_field(payload, pos)?;
+        pos = next;
+        match (field, value) {
+            (1, PbValue::Varint(v)) => result = ConnectResult::from(v),
+            (2, PbValue::Bytes(b)) => device_public_key = Some(b),
+            (3, PbValue::Bytes(b)) => encrypted_session_data = Some(b),
+            _ => {}
+        }
+    }
+    Ok(ConnectResponse { result, device_public_key, encrypted_session_data })
+}
+
+// ── Channel response decoder ──────────────────────────────────────────────────
+
+pub struct RawChannelInfo {
+    pub seq: u32,
+    pub rx_hz: u32,
+    pub tx_hz: u32,
+    pub rx_css: u16,
+    pub tx_css: u16,
+}
+
+/// Decode a `LiteProtos.ChannelInfo` message.
+pub fn decode_channel_info(data: &[u8]) -> Result<RawChannelInfo> {
+    let mut seq = 0u64;
+    let mut rx_hz = 0u64;
+    let mut tx_hz = 0u64;
+    let mut rx_css = 0u64;
+    let mut tx_css = 0u64;
+    let mut pos = 0;
+    while pos < data.len() {
+        let (field, value, next) = pb_read_field(data, pos)?;
+        pos = next;
+        if let PbValue::Varint(v) = value {
+            match field {
+                1 => seq = v,
+                2 => rx_hz = v,
+                3 => tx_hz = v,
+                4 => rx_css = v,
+                5 => tx_css = v,
+                _ => {}
+            }
+        }
+    }
+    Ok(RawChannelInfo {
+        seq: seq as u32,
+        rx_hz: rx_hz as u32,
+        tx_hz: tx_hz as u32,
+        rx_css: rx_css as u16,
+        tx_css: tx_css as u16,
+    })
+}
+
+/// Decode a `LiteProtos.ChannelInfoRequest` wrapper (field 2 = ChannelInfo).
+pub fn decode_channel_info_request(data: &[u8]) -> Result<RawChannelInfo> {
+    let mut pos = 0;
+    while pos < data.len() {
+        let (field, value, next) = pb_read_field(data, pos)?;
+        pos = next;
+        if field == 2 {
+            if let PbValue::Bytes(inner) = value {
+                return decode_channel_info(&inner);
+            }
+        }
+    }
+    bail!("no channelInfo field (field 2) found in ChannelInfoRequest response")
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

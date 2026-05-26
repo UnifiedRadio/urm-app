@@ -40,6 +40,18 @@
     </section>
 
     <section>
+      <h2>加入团队</h2>
+      <form @submit.prevent="joinTeam">
+        <label>邀请码
+          <input v-model="inviteCode" placeholder="8位邀请码" maxlength="8" required />
+        </label>
+        <button class="btn-primary" :disabled="!auth.user || team.loading || !inviteCode">加入</button>
+      </form>
+      <p v-if="joinError" class="banner banner-error">{{ joinError }}</p>
+      <p v-if="joinSuccess" class="banner banner-ok">{{ joinSuccess }}</p>
+    </section>
+
+    <section>
       <h2>Teams</h2>
       <button class="btn" :disabled="!auth.user || team.loading" @click="team.loadAll()">Refresh</button>
       <ul>
@@ -53,11 +65,24 @@
     <section>
       <h2>Activities</h2>
       <ul>
-        <li v-for="activity in team.activities" :key="activity.id">
-          {{ activity.name }} — {{ activity.status }} <span v-if="activity.device_model">· {{ activity.device_model }}</span>
+        <li
+          v-for="activity in team.activities"
+          :key="activity.id"
+          class="activity-item"
+          :class="{ 'activity-selected': selectedActivityId === activity.id }"
+          @click="selectActivity(activity.id)"
+        >
+          <span>{{ activity.name }} — {{ activity.status }}</span>
+          <span v-if="activity.device_model" class="activity-model">· {{ activity.device_model }}</span>
         </li>
         <li v-if="auth.user && !team.activities.length">No activities yet.</li>
       </ul>
+    </section>
+
+    <!-- Risk Pack panel for selected activity -->
+    <section v-if="selectedActivityId">
+      <h2>Risk Pack — {{ selectedActivityName }}</h2>
+      <RiskPackPanel :activity-id="selectedActivityId" />
     </section>
 
     <p v-if="team.error" class="banner banner-error">{{ team.error }}</p>
@@ -65,11 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../store/auth'
 import { useChannelStore } from '../store/channels'
 import { useCloudProfileStore } from '../store/cloudProfiles'
 import { useTeamStore } from '../store/team'
+import { requireSupabase } from '../api/supabase'
+import RiskPackPanel from '../components/RiskPack/RiskPackPanel.vue'
 
 const auth = useAuthStore()
 const channelStore = useChannelStore()
@@ -82,6 +109,14 @@ const activityName = ref('')
 const activityOrgId = ref('')
 const activityDeviceModel = ref('baofeng_uv5r')
 const bindCurrentProfile = ref(true)
+const selectedActivityId = ref<string | null>(null)
+const inviteCode = ref('')
+const joinError = ref('')
+const joinSuccess = ref('')
+
+const selectedActivityName = computed(
+  () => team.activities.find(a => a.id === selectedActivityId.value)?.name ?? '',
+)
 
 onMounted(() => {
   if (auth.user) team.loadAll()
@@ -91,10 +126,37 @@ watch(() => auth.user?.id, id => {
   if (id) team.loadAll()
 })
 
+function selectActivity(id: string) {
+  selectedActivityId.value = selectedActivityId.value === id ? null : id
+}
+
 async function createTeam() {
   await team.createOrganization(teamName.value, teamDescription.value)
   teamName.value = ''
   teamDescription.value = ''
+}
+
+async function joinTeam() {
+  joinError.value = ''
+  joinSuccess.value = ''
+  try {
+    const client = requireSupabase()
+    const { data: org, error: orgErr } = await client
+      .from('organizations')
+      .select('id, name')
+      .eq('invite_code', inviteCode.value.trim())
+      .single()
+    if (orgErr || !org) throw new Error('邀请码无效或已过期。')
+    const { error: memberErr } = await client
+      .from('org_members')
+      .insert({ org_id: org.id, user_id: auth.user!.id, role: 'member' })
+    if (memberErr && !memberErr.message.includes('duplicate')) throw memberErr
+    joinSuccess.value = `成功加入团队"${org.name}"。`
+    inviteCode.value = ''
+    await team.loadAll()
+  } catch (e) {
+    joinError.value = e instanceof Error ? e.message : String(e)
+  }
 }
 
 async function createActivity() {
@@ -112,3 +174,17 @@ async function createActivity() {
   activityName.value = ''
 }
 </script>
+
+<style scoped>
+.activity-item {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.activity-item:hover { background: var(--color-surface-hover, #2a2a2a); }
+.activity-selected { background: var(--color-surface-active, #1e3a5f) !important; }
+.activity-model { color: var(--color-muted, #888); font-size: 0.85rem; }
+</style>

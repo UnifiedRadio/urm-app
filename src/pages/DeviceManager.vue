@@ -6,27 +6,35 @@
     </div>
 
     <section class="write-panel">
-      <h2>UV-5R Safe Write</h2>
-      <p v-if="!channelStore.profile" class="banner banner-warn">Load a profile before running write checks.</p>
+      <h2>写频操作</h2>
+      <div class="banner banner-warn" style="margin-bottom:.75rem">
+        首次对设备写频前，系统会自动备份原始配置。写频完成后建议通过"读回"功能确认写入正确。
+      </div>
+      <p v-if="!channelStore.profile" class="banner banner-warn">请先加载配置文件再执行写频操作。</p>
       <div class="form-row">
-        <label>Port
+        <label>串口
           <select v-model="selectedPort">
-            <option value="">Select port</option>
+            <option value="">选择串口</option>
             <option v-for="p in deviceStore.serialPorts" :key="p.name" :value="p.name">
-              {{ p.name }}
+              {{ p.name }}{{ p.description ? ` — ${p.description}` : '' }}
             </option>
           </select>
         </label>
-        <label>Model
-          <input v-model="model" />
+        <label>设备型号
+          <select v-model="model">
+            <option value="">选择型号</option>
+            <option v-for="t in serialTemplates" :key="t.model" :value="t.model">
+              {{ t.name }}
+            </option>
+          </select>
         </label>
       </div>
       <div class="form-row">
         <button class="btn" :disabled="!channelStore.profile || running" @click="runMockWrite">
-          Mock dry-run
+          模拟 dry-run
         </button>
         <button class="btn-warn" :disabled="!canWrite || running" @click="runSafeWrite">
-          Backup and write
+          备份并写入
         </button>
       </div>
       <WriteProgress :steps="steps" />
@@ -44,13 +52,16 @@ import { useDeviceStore } from '../store/devices'
 import { useChannelStore } from '../store/channels'
 import { backupDevice, writeDevice } from '../api/device'
 import { validateForDevice } from '../api/config'
+import { DEVICE_TEMPLATES } from '../data/deviceTemplates'
+
+const serialTemplates = DEVICE_TEMPLATES.filter(t => t.transport === 'serial')
 
 type StepStatus = 'pending' | 'running' | 'ok' | 'error'
 
 const deviceStore = useDeviceStore()
 const channelStore = useChannelStore()
 const selectedPort = ref('')
-const model = ref('baofeng_uv5r')
+const model = ref('')
 const running = ref(false)
 const message = ref('')
 const messageType = ref<'warning' | 'error'>('warning')

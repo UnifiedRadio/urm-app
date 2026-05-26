@@ -4,7 +4,7 @@ use urm_core::adapter::{
 };
 use urm_core::schema::{DeviceModel, UrcProfile};
 
-static XIAOMI_LOCAL_NAME: &str = "Xiaomi WT2";
+use crate::client::{self, BleSession};
 
 pub struct XiaomiAdapter;
 
@@ -15,29 +15,70 @@ impl RadioAdapter for XiaomiAdapter {
     }
 
     fn supported_models(&self) -> Vec<DeviceModel> {
-        vec!["xiaomi_walkie_talkie_2".into()]
+        vec![
+            "xiaomi_walkie_talkie_2".into(),
+            "jifeng_a108plus".into(),
+        ]
     }
 
     async fn read(&self, transport: &Transport) -> Result<UrcProfile, AdapterError> {
-        let _device_id = ble_device_id(transport)?;
-        // TODO Phase 3: connect via btleplug, enumerate GATT, read channel data
-        Err(AdapterError::Protocol("Xiaomi BLE read not yet implemented — Phase 3".into()))
+        let device_id = ble_device_id(transport)?;
+        let mut session = BleSession::connect(&device_id).await.map_err(proto_err)?;
+        let profile = session.read_profile(&device_id).await.map_err(proto_err)?;
+        session.disconnect().await.ok();
+        Ok(profile)
     }
 
     async fn write(
         &self,
         transport: &Transport,
-        _profile: &UrcProfile,
+        profile: &UrcProfile,
     ) -> Result<WriteReport, AdapterError> {
-        let _device_id = ble_device_id(transport)?;
-        // TODO Phase 3: encode URC channels into Xiaomi GATT write frames
-        Err(AdapterError::Protocol("Xiaomi BLE write not yet implemented — Phase 3".into()))
+        let device_id = ble_device_id(transport)?;
+        let mut session = BleSession::connect(&device_id).await.map_err(proto_err)?;
+
+        let params = client::urc_to_write_params(profile);
+        let total = params.len();
+        let mut written = 0;
+        let mut warnings = Vec::new();
+
+        for (seq, rx_hz, tx_hz, rx_css, tx_css) in params {
+            match session.write_channel(seq, rx_hz, tx_hz, rx_css, tx_css).await {
+                Ok(()) => written += 1,
+                Err(e) => warnings.push(format!("channel {seq}: {e}")),
+            }
+        }
+
+        session.disconnect().await.ok();
+
+        if written == 0 && total > 0 {
+            return Err(AdapterError::WriteAborted(format!(
+                "no channels written; errors: {}",
+                warnings.join("; ")
+            )));
+        }
+
+        Ok(WriteReport {
+            success: warnings.is_empty(),
+            channels_written: written,
+            warnings,
+        })
     }
 
     async fn backup(&self, transport: &Transport) -> Result<BackupImage, AdapterError> {
-        let _device_id = ble_device_id(transport)?;
-        // TODO Phase 3: read full configuration as backup
-        Err(AdapterError::Protocol("Xiaomi BLE backup not yet implemented — Phase 3".into()))
+        let device_id = ble_device_id(transport)?;
+        let mut session = BleSession::connect(&device_id).await.map_err(proto_err)?;
+        let profile = session.read_profile(&device_id).await.map_err(proto_err)?;
+        session.disconnect().await.ok();
+
+        let data = serde_json::to_vec(&profile)
+            .map_err(|e| AdapterError::Protocol(format!("backup serialisation: {e}")))?;
+
+        Ok(BackupImage {
+            data,
+            format: "xiaomi_json".into(),
+            device_model: "xiaomi_walkie_talkie_2".into(),
+        })
     }
 
     async fn dry_run(
@@ -56,4 +97,8 @@ fn ble_device_id(transport: &Transport) -> Result<String, AdapterError> {
             "Xiaomi adapter requires BLE transport".into(),
         )),
     }
+}
+
+fn proto_err(e: anyhow::Error) -> AdapterError {
+    AdapterError::Protocol(e.to_string())
 }

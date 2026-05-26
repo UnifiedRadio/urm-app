@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capabilities for OpenRadio mobile (Android/iOS) — placeholder for Phase 4/5",
+  "platforms": ["android", "ios"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "fs:default"
+  ]
+}

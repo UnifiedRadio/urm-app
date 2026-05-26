@@ -70,7 +70,35 @@
           <button class="btn-ghost" @click="historyOpen = !historyOpen">
             历史 {{ historyOpen ? '▲' : '▼' }}
           </button>
+          <button class="btn-ghost" @click="aiOpen = !aiOpen">AI 建议</button>
         </div>
+      </div>
+
+      <!-- AI assistant panel -->
+      <div v-if="aiOpen" class="ai-panel">
+        <div class="ai-panel-header">
+          <span>AI 配置助手</span>
+          <button class="btn-sm" @click="aiOpen = false">×</button>
+        </div>
+        <div class="ai-messages">
+          <div v-for="(msg, i) in aiMessages" :key="i" :class="['ai-msg', `ai-msg-${msg.role}`]">
+            <pre class="ai-msg-text">{{ msg.content }}</pre>
+          </div>
+          <div v-if="aiLoading" class="ai-msg ai-msg-assistant"><span class="dim">思考中…</span></div>
+        </div>
+        <div class="ai-input-row">
+          <textarea
+            v-model="aiPrompt"
+            rows="2"
+            placeholder="描述你需要的频道配置，例如：帮我添加本地 UHF 模拟中继信道…"
+            @keydown.ctrl.enter="sendAi"
+          />
+          <button class="btn-primary" :disabled="aiLoading || !aiPrompt.trim()" @click="sendAi">发送</button>
+        </div>
+        <p v-if="aiError" class="banner banner-error">{{ aiError }}</p>
+        <p v-if="!aiConfigured" class="banner banner-warn">
+          请在设置中配置 AI API Key。
+        </p>
       </div>
 
       <!-- Validation banners -->
@@ -139,7 +167,7 @@
           <label>模式
             <select v-model="form.mode">
               <option value="analog_fm">模拟 FM</option>
-              <option value="dmr">DMR（Phase 6）</option>
+              <option value="dmr">DMR</option>
             </select>
           </label>
 
@@ -191,6 +219,7 @@
           </label>
 
           <AnalogForm v-if="form.mode === 'analog_fm'" v-model="form.analog" />
+          <DmrForm v-else-if="form.mode === 'dmr'" v-model="form.dmr" />
 
           <div class="modal-actions">
             <button type="button" class="btn" @click="modalOpen = false">取消</button>
@@ -204,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { useChannelStore } from '../store/channels'
 import { useUiStore } from '../store/ui'
@@ -216,11 +245,14 @@ import {
 } from '../api/config'
 import ChannelTable from '../components/ChannelEditor/ChannelTable.vue'
 import AnalogForm from '../components/ChannelEditor/AnalogForm.vue'
+import DmrForm from '../components/ChannelEditor/DmrForm.vue'
 import {
   DEVICE_TEMPLATES, freqRangesForModel, isFreqValid,
   type DeviceTemplate,
 } from '../data/deviceTemplates'
-import type { Channel, AnalogFields, BackupMeta } from '../types/urc'
+import type { Channel, AnalogFields, DmrFields, BackupMeta } from '../types/urc'
+import { useAiConfigStore } from '../store/aiConfig'
+import { callAi } from '../api/ai'
 
 const store = useChannelStore()
 const ui = useUiStore()
@@ -376,9 +408,18 @@ type ChannelForm = {
   power: Channel['power']
   bandwidth: Channel['bandwidth']
   analog: AnalogFields
+  dmr: DmrFields
 }
 
 const defaultAnalog = (): AnalogFields => ({ tone_type: 'none', scan: true })
+const defaultDmr = (): DmrFields => ({
+  color_code: 1,
+  time_slot: 1,
+  talkgroup_id: 1,
+  contact_ref: '',
+  rx_group_ref: '',
+  zone_ref: '',
+})
 const defaultFreq = () => {
   // Pre-fill with first valid frequency for the bound device
   const ranges = boundModel.value ? freqRangesForModel(boundModel.value) : []
@@ -397,6 +438,7 @@ const form = reactive<ChannelForm>({
   power: 'high',
   bandwidth: 'narrow',
   analog: defaultAnalog(),
+  dmr: defaultDmr(),
 })
 const tagsInput = ref('')
 const modalOpen = ref(false)
@@ -418,6 +460,7 @@ function openAddModal() {
     power: 'high',
     bandwidth: 'narrow',
     analog: defaultAnalog(),
+    dmr: defaultDmr(),
   })
   tagsInput.value = ''
   modalOpen.value = true
@@ -433,6 +476,7 @@ function openEditModal(ch: Channel) {
     power: ch.power,
     bandwidth: ch.bandwidth,
     analog: ch.analog ? { ...ch.analog } : defaultAnalog(),
+    dmr: ch.dmr ? { ...ch.dmr } : defaultDmr(),
   })
   tagsInput.value = ch.tags.join(', ')
   modalOpen.value = true
@@ -449,7 +493,7 @@ function submitModal() {
     bandwidth: form.bandwidth,
     tags,
     analog: form.mode === 'analog_fm' ? { ...form.analog } : undefined,
-    dmr: undefined,
+    dmr: form.mode === 'dmr' ? { ...form.dmr } : undefined,
   }
   if (editingChannel.value) {
     store.updateChannel({ ...editingChannel.value, ...base })
@@ -462,6 +506,35 @@ function submitModal() {
 function deleteChannel(ch: Channel) {
   if (!confirm(`删除频道"${ch.name}"？`)) return
   store.removeChannel(ch.id)
+}
+
+// ── AI assistant ─────────────────────────────────────────────────────────────
+const aiConfig = useAiConfigStore()
+const aiOpen = ref(false)
+const aiPrompt = ref('')
+const aiMessages = ref<{ role: 'user' | 'assistant'; content: string }[]>([])
+const aiLoading = ref(false)
+const aiError = ref('')
+const aiConfigured = computed(() => Boolean(aiConfig.apiKey))
+
+async function sendAi() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt || aiLoading.value) return
+  aiMessages.value.push({ role: 'user', content: prompt })
+  aiPrompt.value = ''
+  aiLoading.value = true
+  aiError.value = ''
+  try {
+    const context = store.profile
+      ? `当前配置 "${store.profile.name}" 有 ${store.profile.channels.length} 个频道。设备：${store.profile.devices[0]?.model ?? '未绑定'}。`
+      : '当前无配置文件。'
+    const reply = await callAi(`${context}\n\n${prompt}`, aiConfig)
+    aiMessages.value.push({ role: 'assistant', content: reply })
+  } catch (e) {
+    aiError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    aiLoading.value = false
+  }
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────

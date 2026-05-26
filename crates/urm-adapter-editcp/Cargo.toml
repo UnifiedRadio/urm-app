@@ -10,9 +10,10 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 urm-core = { workspace = true, features = ["adapter-api"] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
+tempfile = "3"

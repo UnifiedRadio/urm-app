@@ -59,6 +59,40 @@
       <p v-if="creditBalance !== null">Balance: {{ creditBalance }}</p>
       <p v-if="creditError" class="banner banner-error">{{ creditError }}</p>
     </section>
+
+    <section>
+      <h2>AI 配置</h2>
+      <p class="hint">配置 OpenAI 兼容的 AI API，用于 AI 配置助手和 Risk Pack AI 摘要。</p>
+      <label>模型
+        <input v-model="aiConfig.model" placeholder="deepseek-v4-flash" />
+      </label>
+      <label>Base URL
+        <input v-model="aiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
+      </label>
+      <label>API Key
+        <input
+          v-model="aiConfig.apiKey"
+          :type="showApiKey ? 'text' : 'password'"
+          placeholder="sk-..."
+          autocomplete="off"
+        />
+        <button type="button" class="btn-sm" @click="showApiKey = !showApiKey">
+          {{ showApiKey ? '隐藏' : '显示' }}
+        </button>
+      </label>
+      <div class="form-row">
+        <button class="btn-primary" @click="testAi" :disabled="aiTesting || !aiConfig.apiKey">
+          {{ aiTesting ? '测试中…' : '测试连接' }}
+        </button>
+        <button class="btn" @click="aiConfig.reset()">恢复默认</button>
+      </div>
+      <p v-if="aiTestResult" :class="aiTestOk ? 'banner banner-ok' : 'banner banner-error'">
+        {{ aiTestResult }}
+      </p>
+      <p class="hint" style="margin-top:.5rem">
+        API Key 保存在本地，不上传服务器。
+      </p>
+    </section>
   </div>
 </template>
 
@@ -68,17 +102,24 @@ import { functionUrl } from '../api/supabase'
 import { useAuthStore } from '../store/auth'
 import { useChannelStore } from '../store/channels'
 import { useCloudProfileStore } from '../store/cloudProfiles'
+import { useAiConfigStore } from '../store/aiConfig'
+import { callAi } from '../api/ai'
 import type { CloudProfileRow } from '../types/cloud'
 
 const auth = useAuthStore()
 const channelStore = useChannelStore()
 const cloud = useCloudProfileStore()
+const aiConfig = useAiConfigStore()
 
 const email = ref('')
 const password = ref('')
 const creditBalance = ref<number | null>(null)
 const creditLoading = ref(false)
 const creditError = ref('')
+const showApiKey = ref(false)
+const aiTesting = ref(false)
+const aiTestResult = ref('')
+const aiTestOk = ref(false)
 
 async function signIn() {
   await auth.signIn(email.value, password.value)
@@ -98,6 +139,25 @@ async function saveCurrentProfile() {
 
 function loadProfile(row: CloudProfileRow) {
   channelStore.setProfile(cloud.toProfile(row))
+}
+
+async function testAi() {
+  aiTesting.value = true
+  aiTestResult.value = ''
+  try {
+    const reply = await callAi('请回复"连接成功"三个字。', {
+      baseUrl: aiConfig.baseUrl,
+      apiKey: aiConfig.apiKey,
+      model: aiConfig.model,
+    })
+    aiTestOk.value = true
+    aiTestResult.value = `连接成功：${reply.slice(0, 80)}`
+  } catch (e) {
+    aiTestOk.value = false
+    aiTestResult.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    aiTesting.value = false
+  }
 }
 
 async function loadCredit() {
